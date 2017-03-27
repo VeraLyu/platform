@@ -21,8 +21,8 @@ import * as ChannelActions from 'actions/channel_actions.jsx';
 import Constants from 'utils/constants.jsx';
 const ScrollTypes = Constants.ScrollTypes;
 
-import PostStore from 'stores/post_store.jsx';
 import PreferenceStore from 'stores/preference_store.jsx';
+import PostStore from 'stores/post_store.jsx';
 
 import {FormattedDate, FormattedMessage} from 'react-intl';
 
@@ -49,6 +49,7 @@ export default class PostList extends React.Component {
         this.scrollToBottomAnimated = this.scrollToBottomAnimated.bind(this);
         this.handleKeyDown = this.handleKeyDown.bind(this);
         this.childComponentDidUpdate = this.childComponentDidUpdate.bind(this);
+        this.loadFinish = this.loadFinish.bind(this);
 
         this.jumpToPostNode = null;
         this.wasAtBottom = true;
@@ -61,7 +62,8 @@ export default class PostList extends React.Component {
             isScrolling: false,
             fullWidthIntro: PreferenceStore.get(Preferences.CATEGORY_DISPLAY_SETTINGS, Preferences.CHANNEL_DISPLAY_MODE, Preferences.CHANNEL_DISPLAY_MODE_DEFAULT) === Preferences.CHANNEL_DISPLAY_MODE_FULL_SCREEN,
             topPostId: null,
-            unViewedCount: 0
+            unViewedCount: 0,
+            isLoading: false
         };
 
         if (props.channel) {
@@ -122,6 +124,12 @@ export default class PostList extends React.Component {
         return this.refs.postlist.clientHeight + this.refs.postlist.scrollTop >= this.refs.postlist.scrollHeight - atBottomMargin;
     }
 
+    isAtTop() {
+        const atTopMargin = 10;
+
+        return this.refs.postlist.scrollTop <= atTopMargin;
+    }
+
     handleScroll() {
         // HACK FOR RHS -- REMOVE WHEN RHS DIES
         const childNodes = this.refs.postlistcontent.childNodes;
@@ -155,6 +163,13 @@ export default class PostList extends React.Component {
             this.props.postListScrolled(this.isAtBottom());
             this.prevScrollHeight = this.refs.postlist.scrollHeight;
             this.prevOffsetTop = this.jumpToPostNode.offsetTop;
+            if (this.isAtBottom() && this.props.showMoreMessagesBottom) {
+                this.loadMorePostsBottom();
+            }
+
+            if (this.isAtTop() && this.props.showMoreMessagesTop) {
+                this.loadMorePostsTop();
+            }
         }, 0);
 
         this.scrollStopAction.fireAfter(Constants.SCROLL_DELAY);
@@ -201,17 +216,28 @@ export default class PostList extends React.Component {
         }
     }
 
-    loadMorePostsTop(e) {
-        e.preventDefault();
-
-        if (this.props.isFocusPost) {
-            return GlobalActions.emitLoadMorePostsFocusedTopEvent();
+    loadMorePostsTop() {
+        if (this.state.isLoading) {
+            return;
         }
-        return GlobalActions.emitLoadMorePostsEvent();
+        this.setState({isLoading: true});
+        if (this.props.isFocusPost) {
+            GlobalActions.emitLoadMorePostsFocusedTopEvent();
+        } else {
+            GlobalActions.emitLoadMorePostsEvent();
+        }
     }
 
     loadMorePostsBottom() {
+        if (this.state.isLoading) {
+            return;
+        }
+        this.setState({isLoading: true});
         GlobalActions.emitLoadMorePostsFocusedBottomEvent();
+    }
+
+    loadFinish() {
+        this.setState({isLoading: false});
     }
 
     createPosts(posts, order) {
@@ -521,7 +547,7 @@ export default class PostList extends React.Component {
     }
 
     checkAndUpdateScrolling() {
-        if (this.props.postList != null && this.refs.postlist) {
+        if (this.props.postList != null && this.refs.postlist && !this.state.isScrolling) {
             this.updateScrolling();
         }
     }
@@ -534,6 +560,7 @@ export default class PostList extends React.Component {
         window.addEventListener('resize', this.handleResize);
         window.addEventListener('keydown', this.handleKeyDown);
 
+        PostStore.addReceivedPostsListener(this.loadFinish);
         PostStore.addPostDraftChangeListener(this.props.channelId, this.handlePostDraftChange);
     }
 
@@ -551,6 +578,7 @@ export default class PostList extends React.Component {
         window.removeEventListener('keydown', this.handleKeyDown);
         this.scrollStopAction.cancel();
 
+        PostStore.removeReceivedPostsListener(this.loadFinish);
         PostStore.removePostDraftChangeListener(this.props.channelId, this.handlePostDraftChange);
     }
 
@@ -567,17 +595,12 @@ export default class PostList extends React.Component {
         let moreMessagesTop;
         if (this.props.showMoreMessagesTop) {
             moreMessagesTop = (
-                <a
-                    ref='loadmoretop'
-                    className='more-messages-text theme'
-                    href='#'
-                    onClick={this.loadMorePostsTop}
-                >
+                <div className='more-messages-text theme'>
                     <FormattedMessage
                         id='posts_view.loadMore'
-                        defaultMessage='Load more messages'
+                        defaultMessage='Loading more messages...'
                     />
-                </a>
+                </div>
             );
         } else {
             moreMessagesTop = this.introText;
@@ -587,14 +610,12 @@ export default class PostList extends React.Component {
         let moreMessagesBottom;
         if (this.props.showMoreMessagesBottom) {
             moreMessagesBottom = (
-                <a
-                    ref='loadmorebottom'
-                    className='more-messages-text theme'
-                    href='#'
-                    onClick={this.loadMorePostsBottom}
-                >
-                    <FormattedMessage id='posts_view.loadMore'/>
-                </a>
+                <div className='more-messages-text theme'>
+                    <FormattedMessage
+                        id='posts_view.loadMore'
+                        defaultMessage='Loading more messages...'
+                    />
+                </div>
             );
         }
 

@@ -17,6 +17,7 @@ const POSTS_VIEW_JUMP_EVENT = 'post_list_jump';
 const SELECTED_POST_CHANGE_EVENT = 'selected_post_change';
 const POST_PINNED_CHANGE_EVENT = 'post_pinned_change';
 const POST_DRAFT_CHANGE_EVENT = 'post_draft_change';
+const RECEIVED_POSTS_CHANGE_EVENT = 'received_posts_change';
 
 class PostStoreClass extends EventEmitter {
     constructor() {
@@ -545,6 +546,18 @@ class PostStoreClass extends EventEmitter {
         this.removeListener(POST_PINNED_CHANGE_EVENT, callback);
     }
 
+    addReceivedPostsListener(callback) {
+        this.on(RECEIVED_POSTS_CHANGE_EVENT, callback);
+    }
+
+    removeReceivedPostsListener(callback) {
+        this.removeListener(RECEIVED_POSTS_CHANGE_EVENT, callback);
+    }
+
+    emitReceivedPostsListener() {
+        this.emit(RECEIVED_POSTS_CHANGE_EVENT);
+    }
+
     getCurrentUsersLatestPost(channelId, rootId) {
         const userId = UserStore.getCurrentId();
 
@@ -681,6 +694,7 @@ PostStore.dispatchToken = AppDispatcher.register((payload) => {
         PostStore.storePosts(action.id, makePostListNonNull(action.post_list), action.checkLatest, action.checkEarliest);
         PostStore.checkBounds(action.id, action.numRequested, makePostListNonNull(action.post_list), action.before);
         PostStore.emitChange();
+        PostStore.emitReceivedPostsListener();
         break;
     }
     case ActionTypes.RECEIVED_FOCUSED_POST:
